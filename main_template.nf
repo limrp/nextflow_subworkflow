@@ -11,18 +11,37 @@
 
 nextflow.enable.dsl = 2
 
-params.csv = './path/to/default.csv'  // placeholder path to csv input
+/*
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    GENOME PARAMETER VALUES
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+*/
 
-Channel
-    .fromPath(params.csv)
-    .splitCsv(header: false, sep: ',')
-    .filter { row -> row[0] != "sample_id" && row[0] != "sample" }  // This will filter out the header line
-    //.filter { row -> !(row[0] == "sample_id" || row[0] == "sample") } // This will also filter out the header line
-    .map { row -> [ [id: row[0]], file(row[1].trim()) ] } 
-    .set { fasta_ch }
+params.fasta = WorkflowMain.getGenomeAttribute(params, 'fasta')
 
-    // .trim() to ensure that any leading or trailing spaces in the file paths are removed
-    // fasta_ch is a channel of tuples: val(meta), file(path/to/fasta)
+/*
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    VALIDATE & PRINT PARAMETER SUMMARY
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+*/
+
+include { validateParameters; paramsHelp } from 'plugin/nf-validation'
+
+// Print help message if needed
+if (params.help) {
+    def logo = NfcoreTemplate.logo(workflow, params.monochrome_logs)
+    def citation = '\n' + WorkflowMain.citation(workflow) + '\n'
+    def String command = "nextflow run ${workflow.manifest.name} --input samplesheet.csv --genome GRCh37 -profile docker"
+    log.info logo + paramsHelp(command) + citation + NfcoreTemplate.dashedLine(params.monochrome_logs)
+    System.exit(0)
+}
+
+// Validate input parameters
+if (params.validate_params) {
+    validateParameters()
+}
+
+WorkflowMain.initialise(workflow, params, log)
 
 /*
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -30,13 +49,13 @@ Channel
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 */
 
-include { FASTA_METAPRODIGAL_CDHIT } from './subworkflows/local/fasta_metaprodigal_cdhit.nf'
+include { METAGEN } from './workflows/metagen'
 
 //
 // WORKFLOW: Run main nf-core/metagen analysis pipeline
 //
 workflow NFCORE_METAGEN {
-    FASTA_METAPRODIGAL_CDHIT(fasta_ch)
+    METAGEN ()
 }
 
 /*
